@@ -1,0 +1,255 @@
+CREATE OR REPLACE PROCEDURE `smg-zenith-itau-co-prd-mg.sandbox_bi.vista_itau`()
+OPTIONS (strict_mode=false)
+begin
+ 
+ 
+merge sandbox_bi.vista_campaign a
+using google_sheets.st_nombres_aon b
+on a.campaign_id = b.campaign_id and IF(EXTRACT(MONTH FROM a.date_day) = 7, 'JULIO',IF(EXTRACT(MONTH FROM a.date_day) = 8, 'AGOSTO', 'JUNIO')) = b.mes
+when matched then update set a.campaign_name = b.campaign_name;
+ 
+CREATE OR REPLACE TABLE smg-taagpgntrla-prd-mg.sandbox_bi.vista_planeada PARTITION BY date_day AS
+WITH
+conteo_dias AS(
+SELECT
+campaign_id,
+SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] as hexa,
+concat(extract(year from date_day),'-',extract(month from date_day)) as day_condition,
+COUNT(DISTINCT date_day) AS dias_corridos
+FROM `sandbox_bi.vista_campaign`
+group by all
+UNION ALL
+SELECT
+NULL campaign_id,
+codigo_hexadecimal,
+concat(extract(year from fecha_inicio),'-',extract(month from fecha_inicio)) as day_condition,
+COUNT(DISTINCT fecha_inicio) AS dias_corridos
+FROM `google_sheets.dm_medios_externos`
+group by all
+),
+ 
+procedimiento_hexas_repetidos as (
+select
+SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] as hexa,
+concat(extract(year from date_day),'-',extract(month from date_day)) as day_condition,
+COUNT(DISTINCT campaign_id) AS num_campaign
+from sandbox_bi.vista_campaign
+group by all
+UNION ALL
+select
+codigo_hexadecimal,
+concat(extract(year from fecha_inicio),'-',extract(month from fecha_inicio)) as day_condition,
+COUNT(DISTINCT codigo_hexadecimal) AS num_campaign
+from google_sheets.dm_medios_externos
+group by all
+),
+ 
+tabla_ejecutada AS (
+ 
+SELECT
+account_name,
+campaign_name,
+campaign_id,
+plataforma,
+account_currency,
+sum(impressions) impressions,
+sum(clicks) clicks,
+sum(cost) as cost,
+date_day,
+sum(video_views) video_views,
+sum(video_fully_played) video_fully_played,
+sum(add_to_cart) add_to_cart,
+sum(purchase_items) purchase_items,
+sum(purchase_value) purchase_value,
+sum(landing_page_views) landing_page_views,
+sum(completed_registration) completed_registration,
+sum(time_spent_10_s) time_spent_10_s,
+sum(conversions_dv) conversions_dv ,
+sum(video_completions_25) video_completions_25,
+sum(video_completions_50) video_completions_50,
+sum(video_completions_75) video_completions_75,
+sum(thruplays) thruplays,
+sum(cost_usd) cost_usd,
+sum(compras) compras,
+categories,
+countries,
+marca,
+funnel_phase,
+pais_agrupado,
+account_id,
+sum(engagement) AS engagement,
+sum(post_likes) AS post_likes,
+sum(post_comments) AS post_comments,
+sum(post_shares) AS post_shares,
+sum(post_saves) AS post_saves,
+sum(leads) AS leads,
+SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] as hexa,
+concat(extract(year from date_day),'-',extract(month from date_day)) as day_condition,
+sum(cost_cop) AS cost_cop,
+sum(cost_dolares) AS cost_dolares,
+sum(leadspersonalizado) leadspersonalizado,
+FROM `sandbox_bi.vista_campaign`
+GROUP BY ALL
+ 
+ 
+UNION ALL
+ 
+SELECT
+NULL AS account_name,
+nombre_de_campana AS campaign_name,
+NULL AS campaign_id,
+medio AS plataforma,
+moneda AS account_currency,
+sum(impresiones) as impressions,
+sum(clicks) as clicks,
+sum(media_cost) as cost,
+fecha_inicio as date_day,
+sum(video_views) as video_views,
+sum(reproduccion_de_video_al_100) as video_fully_played,
+null as add_to_cart,
+null as purchase_items,
+null as purchase_value,
+null as landing_page_views,
+null as completed_registration,
+null as time_spent_10_s,
+null as conversions_dv ,
+sum(reproduccion_de_video_al_25) as video_completions_25,
+sum(reproduccion_de_video_al_50) as video_completions_50,
+sum(reproduccion_de_video_al_75) as video_completions_75,
+null as thruplays,
+null as cost_usd,
+null as compras,
+categoria as categories,
+pais as countries,
+marca as marca,
+funnel_mms as funnel_phase,
+NULL as pais_agrupado,
+NULL as account_id,
+null as engagement,
+null as post_likes,
+null as post_comments,
+null as post_shares,
+null as post_saves,
+sum(leads) as leads,
+codigo_hexadecimal as hexa,
+concat(extract(year from fecha_inicio),'-',extract(month from fecha_inicio)) as day_condition,
+sum(media_cost) AS cost_cop,
+sum(cost_dolares) AS cost_dolares,
+null as leadspersonalizado,
+FROM `smg-taagpgntrla-prd-mg.google_sheets.dm_medios_externos`
+GROUP BY ALL
+ 
+ 
+),
+ 
+ 
+tabla_planeada AS (
+ 
+SELECT
+id_flow,
+flow_code AS nombre_flow_DB,
+pais_name AS pais_name_DB,
+brand_name AS brand_name_DB,
+media_name AS plataforma_DB,
+und_medida_name AS formato_DB,
+funnel_stage_desc AS etapa_funnel_DB,
+line_media_investment AS inversion_planeado_DB,
+tipo_compra_code AS tipo_compra_DB,
+objective_name AS objetivo_DB,
+line_media_expected_actions  AS kpi_planeado_DB,
+line_media_expected_imp AS esperado_impresiones_DB,
+line_media_cost_compra AS costo_planeado_DB,
+amount_spent AS ejecutado_DB,
+line_media_reach AS alcance_estimadoDB,
+line_media_start_date AS fecha_inicio_DB,
+line_media_end_date AS fecha_fin_DB,
+--TRM
+-- COP a USD
+CASE
+  WHEN currency_name='COP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-6' THEN line_media_investment / 4260
+  WHEN currency_name='COP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-7' THEN line_media_investment / 4230
+  WHEN currency_name='COP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-8' THEN line_media_investment / 4176
+  WHEN currency_name='COP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-9' THEN line_media_investment / 4159
+  WHEN currency_name='COP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-10' THEN line_media_investment / 4041
+ 
+--MXN a USD
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-6' THEN line_media_investment / 0.5
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-7' THEN line_media_investment / 0.5
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-8' THEN line_media_investment / 0.5
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-9' THEN line_media_investment / 0.5
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-10' THEN line_media_investment / 0.5
+ 
+--CLP a USD
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-6' THEN line_media_investment / 0.0011
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-7' THEN line_media_investment / 0.0011
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-8' THEN line_media_investment / 0.0011
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-9' THEN line_media_investment / 0.0011
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-10' THEN line_media_investment / 0.0011
+ELSE line_media_investment END AS inversion_planeada_dolares,
+ 
+--USD a COP
+CASE
+  WHEN currency_name='USD' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-6' THEN line_media_investment * 4085
+  WHEN currency_name='USD' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-7' THEN line_media_investment * 4195
+  WHEN currency_name='USD' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-8' THEN line_media_investment * 4010
+  WHEN currency_name='USD' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-9' THEN line_media_investment * 3926.50
+  WHEN currency_name='USD' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-10' THEN line_media_investment * 3845.25
+  WHEN currency_name='USD' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-11' THEN line_media_investment * 3845.25
+-- MXN a COP
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-6' THEN line_media_investment * 217.16
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-7' THEN line_media_investment * 222.76
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-8' THEN line_media_investment * 214.92
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-9' THEN line_media_investment * 213.84
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-10' THEN line_media_investment * 210.34
+  WHEN currency_name='MXN' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-11' THEN line_media_investment * 210.34
+ 
+  --CLP a COP
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-6' THEN line_media_investment * 4.35
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-7' THEN line_media_investment * 4.28
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-8' THEN line_media_investment * 4.16
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-9' THEN line_media_investment * 4.07
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-10' THEN line_media_investment * 4.11
+  WHEN currency_name='CLP' and concat(extract(year FROM line_media_start_date),'-',extract(month FROM line_media_start_date)) = '2025-11' THEN line_media_investment * 4.11
+ELSE line_media_investment END AS inversion_planeada_cop,
+ 
+coalesce(aon_hex_id,hex_id_line) as hex_id_line,
+concat(extract(year from line_media_start_date),'-',extract(month from line_media_start_date)) as day_condition_digital_box,
+FROM `sandbox_bi.digital_box`
+),
+ 
+ 
+union_tabla AS (
+SELECT
+a.*,
+b.*,
+from tabla_planeada a
+left join tabla_ejecutada b
+on a.hex_id_line = b.hexa and b.day_condition = a.day_condition_digital_box
+group by all
+),
+ 
+division_dias AS (
+SELECT a.*,
+c.dias_corridos,
+d.num_campaign,
+SAFE_DIVIDE(SAFE_DIVIDE(a.inversion_planeado_DB,c.dias_corridos),d.num_campaign) planeado_diario,
+SAFE_DIVIDE(SAFE_DIVIDE(a.inversion_planeada_dolares,c.dias_corridos),d.num_campaign) inv_planeada_dolares,
+SAFE_DIVIDE(SAFE_DIVIDE(a.inversion_planeada_cop,c.dias_corridos),d.num_campaign) inv_planeada_cop,
+SAFE_DIVIDE(SAFE_DIVIDE(if(a.objetivo_DB in ('IMPRESSIONS','REACH','BRAND AWARENESS'),a.esperado_impresiones_DB,a.kpi_planeado_DB),c.dias_corridos),d.num_campaign) kpi_plneado_diario,
+CAST(NULL AS FLOAT64) AS roas,
+from union_tabla a
+left join conteo_dias c
+on a.hex_id_line = c.hexa and a.day_condition_digital_box = c.day_condition and if(a.campaign_id is null,'1',a.campaign_id) = if(c.campaign_id is null,'1',c.campaign_id)
+left join procedimiento_hexas_repetidos d
+on a.hex_id_line = d.hexa and a.day_condition_digital_box = d.day_condition
+)
+ 
+ 
+select * from division_dias;
+ 
+merge sandbox_bi.vista_planeada a
+using google_sheets.st_roas_nutresa b
+on cast(a.campaign_id as string) = b.campana_id and cast(a.date_day as string) = b.dia
+when matched then update set a.roas = CAST(REPLACE(IF(b.roas = '','0',b.roas),',','.') AS FLOAT64);
+end;
+ 
