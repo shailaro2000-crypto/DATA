@@ -1,1 +1,403 @@
+CREATE OR REPLACE PROCEDURE `smg-taagpgntrla-prd-mg.sandbox_bi.vista_campaign`(fecha_inicio DATE, fecha_fin DATE)
+OPTIONS (strict_mode=false)
+BEGIN
+merge prod.dim_names a
+using google_sheets.st_nombres_aon b
+on a.campaign_id = b.campaign_id and 'JULIO' = b.mes and a.updated_at <= '2025-07-01'
+when matched then update set a.campaign_name = b.campaign_name;
+/*merge prod.dim_names a
+using (select distinct account_id,account_name from prod.dim_names where account_name not like '%-%') b
+on a.account_id = b.account_id 
+when matched then update set a.account_name = b.account_name;
+*/
+update prod.dim_names set account_name = 'CO_Nutresa_L&C_Leños y Carbon_(MMS)_COP' where account_id = '7386866537';
 
+DELETE FROM `sandbox_bi.vista_campaign` WHERE date_day BETWEEN fecha_inicio AND fecha_fin;
+
+INSERT INTO `sandbox_bi.vista_campaign`
+  with Union_plataformas as (
+    SELECT "FACEBOOK" as plataforma, names_key, account_currency, impressions, link_clicks as clicks,cost, date_day, video_views, video_fully_played,add_to_cart,
+            purchase_items, purchase_value, landing_page_views, completed_registration,time_spent_10_s, 0 conversions_dv, video_completions_25,video_completions_50,
+            video_completions_75,thruplays,null as cost_usd, null as categories, null as countries, null as marca, null as funnel_phase,null as preview_shareable_link,null as thumbnail_url, null as pais, platform_key,engagement,post_likes,post_comments,post_shares,post_saves,leads,null as cost_cop, null as cost_dolares
+            
+    from `prod.fct_facebook`
+    where granularity in ("campaign")  and date_day BETWEEN fecha_inicio AND fecha_fin
+    union all
+    SELECT "TIKTOK" as plataforma, names_key, account_currency, impressions, clicks,cost,date_day, video_views, video_fully_played, 0 as add_to_cart,0 as purchase_items,
+    0.0 purchase_value, 0 landing_page_views, 0 completed_registration,0 time_spent_10_s, conversions as conversions_dv, video_completions_25,video_completions_50,
+    video_completions_75, 0 thruplays,null as cost_usd, null as categories, null as countries, null as marca, null as funnel_phase,null as preview_shareable_link,null as thumbnail_url,null as pais,null as platform_key,engagement,post_likes,post_comments,post_shares, null as post_saves, null as leads,null as cost_cop, null as cost_dolares
+            
+    from `prod.fct_tiktok`
+    where granularity in ("campaign")  and date_day BETWEEN fecha_inicio AND fecha_fin
+    union all
+
+    SELECT "GOOGLE ADS" as plataforma, names_key,null account_currency, impressions, clicks,cost,date_day, video_views, video_fully_played, 0 as add_to_cart,
+    0 as purchase_items,0.0 purchase_value, 0 landing_page_views, 0 completed_registration, 0 time_spent_10_s, conversions as conversions_dv, video_completions_25,
+    video_completions_50,video_completions_75, 0 thruplays, null as cost_usd, null as categories, null as countries, null as marca,null as funnel_phase,null as preview_shareable_link,null as thumbnail_url,null as pais,null as platform_key,engagement, null as post_likes,null as post_comments,null as post_shares, null as post_saves, null as leads,null as cost_cop, null as cost_dolares
+    from `prod.fct_google_ads`
+    where granularity in ("campaign") and date_day BETWEEN fecha_inicio AND fecha_fin
+    union all
+
+    SELECT "YOUTUBE-DV360" as plataforma, names_key,account_currency, impressions, clicks, revenue as cost, date_day, video_views, video_fully_played, 0 as add_to_cart,
+    0 as purchase_items,0.0 purchase_value, 0 landing_page_views, 0 completed_registration, 0 time_spent_10_s,conversions conversions_dv, video_completions_25,
+    video_completions_50,video_completions_75, 0 thruplays,null as cost_usd, null as categories, null as countries, null as marca, null as funnel_phase,null as preview_shareable_link,null as thumbnail_url,null as pais, null as platform_key,null as engagement, null as post_likes,null as post_comments,null as post_shares, null as post_saves, null as leads,null as cost_cop, null as cost_dolares
+    from `prod.fct_dv`
+    where granularity in ("campaign") and date_day BETWEEN fecha_inicio AND fecha_fin
+  ),
+  CAMPOS as (
+  SELECT 
+ account_name,campaign_name, campaign_id, plataforma, account_currency,sum(impressions) AS impressions, sum(clicks) as clicks,sum(cost) as cost,date_day, sum(video_views) as video_views, sum(video_fully_played) as video_fully_played,sum(add_to_cart) as add_to_cart, sum(purchase_items) as purchase_items,sum(purchase_value) as purchase_value, sum(landing_page_views) as landing_page_views, sum(completed_registration) as completed_registration, sum(time_spent_10_s) as time_spent_10_s, sum(conversions_dv) as conversions_dv,sum(video_completions_25) as video_completions_25,sum(video_completions_50) as video_completions_50,sum(video_completions_75) as video_completions_75,sum(thruplays) as thruplays, sum(cost_usd) as cost_usd,
+
+
+  -- Clasificación por categoría
+  CASE
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'TMLUC') THEN 'TMLUC'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'gold') THEN 'TMLUC'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pastas') THEN 'Pastas'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'carnicos') THEN 'Carnicos'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'zenu') THEN 'Carnicos'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'tosh') THEN 'Tosh'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'chocolate') THEN 'Chocolates'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cafe') THEN 'Café'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'galleta') THEN 'Galletas'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'novaventa') THEN 'Novaventa'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'papa johns') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'papajohns') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'el corral gourment') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'el corral') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'beer station') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'helados') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'leños') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'polet') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pops') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pozuelo') THEN 'Galletas'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'aloha') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'burger bar') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'aco') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'setas') THEN 'Carnicos'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'evok') THEN 'ACO'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado institucional') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado kids') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado navidad') THEN 'Helados'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'haka') THEN 'Chocolates'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'benet') THEN 'Chocolates'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cremino') THEN 'Chocolates'
+    ELSE 'Not Declared'
+  END AS categories,
+  -- Clasificación por país
+  CASE
+   --Caso especial Sello Rojo Panama y Ecuador
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'sell_pan') THEN 'Panamá Cop'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'ecu_tus-momentos-duca') THEN 'Ecuador Cop'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'grn_gtm') THEN 'Guatemala'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cri') THEN 'Costa Rica'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'co_nutresa') THEN 'Colombia'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pe_nutresa') THEN 'Perú'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cr_nutresa') THEN 'Costa Rica'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'ec_nutresa') THEN 'Ecuador'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pa_nutresa') THEN 'Panamá'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'gt_nutresa') THEN 'Guatemala'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cl_nutresa') THEN 'Chile'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mx') THEN 'Mexico'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'abw') THEN 'Aruba'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cw') THEN 'Curaçao'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'tto') THEN 'Trinidad y Tobago'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'jam') THEN 'Jamaica'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'sur') THEN 'Surinam'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'col') THEN 'Colombia'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'dom') THEN 'Republica Dominicana'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'slv') THEN 'El Salvador'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'hnd') THEN 'Honduras'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'col') THEN 'Colombia'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'nic') THEN 'Nicaragua'
+    ELSE 'Not Declared'
+  END AS countries,
+  -- Clasificación por marca
+  CASE
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'gold') THEN 'Café Gold'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cremino') THEN 'Cremino'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'compañia nacional de chocolates_tosh') THEN 'Tosh'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'chiky') THEN 'Chiky'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'badia') THEN 'Badia'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'beer station') THEN 'Beer station'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'benet') THEN 'Benet'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'blue ribbon') THEN 'Blue Ribbon'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'leños') THEN 'Leños y carbon'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'menta') THEN 'Yoguen Früz RD'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'yog') THEN 'Yoguen Früz RD'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'atul') THEN 'Atulao'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'caribe_nutresa_aco_bon') THEN 'Bon Caribe'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'bonu') THEN 'Bon USA'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'bon') THEN 'BON'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'artesanal') THEN 'Artesanal'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'bocatto') THEN 'Bocatto'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'chococono') THEN 'Chococono'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'drac') THEN 'Drácula'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado') THEN 'Crem Helado'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado institucional') THEN 'Crem Helado Institucional'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado kids') THEN 'Crem Helado Kids'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado navidad') THEN 'Crem Helado Navidad'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'polet') THEN 'Polet'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'galleta con helado') THEN 'Galleta con Helado' 
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'paletas chocolisto') THEN 'Paletas Chocolisto'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'minions') THEN 'Paleta Minions'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'casero') THEN 'Casero'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'chocolisto') THEN 'Chocolisto'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'colcafe') THEN 'Colcafe'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'comarrico') THEN 'Comarrico'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'corona') THEN 'Corona'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'corral gourmet') THEN 'El Corral Gourmet'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado') THEN 'Crem Helado'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'crem helado kids') THEN 'Crem Helado Kids'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cruz') THEN 'Cruz'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cunit') THEN 'Cunit'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'doria_ancestral') THEN 'Ancestral'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'monticello') THEN 'Monticello'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'doria') THEN 'Doria'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'ducales') THEN 'Ducales'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'dux') THEN 'Dux'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'el corral') THEN 'El Corral'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'evok') THEN 'EVOK'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'festival') THEN 'Festival'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'gol') THEN 'Gol'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'granuts') THEN 'Granuts'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'haka') THEN 'Haka'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'jet') THEN 'Jet'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'jumbo') THEN 'Jumbo'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'johnnys') THEN 'Johnnys'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'la bastilla') THEN 'La Bastilla'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'la especial chocolate') THEN 'La Especial chocolate'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'la especial nueces') THEN 'La Especial nueces'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'litros crem helado') THEN 'Litros Crem Helado'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'lyne') THEN 'Lyne'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'matiz') THEN 'Matiz'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'montblanc') THEN 'Montblanc'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'navidad noel') THEN 'Navidad Noel'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'noel insittucional') THEN 'Noel Institucional'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'novaventa en la via') THEN 'Novaventa en la via'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'novaventa mass') THEN 'Novaventa Mass'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'novaventa sas') THEN 'Novaventa'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'novaventa oficial') THEN 'Novaventa Oficial'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'nutresa corporativo') THEN 'Nutresa Corporativo'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'papa johns') THEN 'Papa Johns'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'papajohns') THEN 'Papa Johns'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pietrán|pietran') THEN 'Pietran'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'polet') THEN 'Polet'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'ranchera') THEN 'Ranchera'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'rica') THEN 'Rica'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'rica y cunit') THEN 'Rica y Cunit'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'saltin') THEN 'Saltin'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'noel') THEN 'Noel'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'scooping') THEN 'Scooping'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'sello rojo') THEN 'Sello Rojo'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'setas de cuivá') THEN 'Setas de Cuivá'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'temporadas zenu') THEN 'Temporadas Zenu'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'tesalia') THEN 'Tesalia'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'nutresa_tosh') THEN 'Tosh'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'tutto') THEN 'Tutto'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'xtraloko') THEN 'Xtraloko'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'winters') THEN 'Winters'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'zenu') THEN 'Zenu'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'berard') THEN 'Berard'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'setas') THEN 'Setas'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'berard') THEN 'Berard'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'poz') THEN 'Pozuelo'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'burger bar') THEN 'Burger Bar'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cocoa dulce') THEN 'Cocoa Dulce'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'pops') THEN 'Pops'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'choys') THEN 'Choys'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'nucita') THEN 'Nucita'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'bokitas') THEN 'Bokitas y Club Extra'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'club extra') THEN 'Bokitas y Club Extra'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'chiky') THEN 'Chiky'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'picaras') THEN 'Picaras'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'Haka') THEN 'Haka'
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'cordillera') THEN 'Cordillera'
+    ELSE 'Not Declared'
+  END AS marca,
+  CASE
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'awr') AND REGEXP_CONTAINS(LOWER(campaign_name), r'cli') THEN 'Consideration'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cpm') THEN 'Awareness'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'awr') THEN 'Awareness'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cns') THEN 'Conversion'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cpv') THEN 'Awareness'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cnv') THEN 'Conversion'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cpe') THEN 'Engagement'
+    WHEN REGEXP_CONTAINS(LOWER(campaign_name), r'cpa') THEN 'Acquisition'
+    ELSE 'Not Declared'
+  END AS funnel_phase,
+  dim_names.preview_shareable_link as preview_shareable_link,
+  dim_names.thumbnail_url as thumbnail_url,
+  CASE
+   
+       WHEN REGEXP_CONTAINS(account_name, "co_") OR REGEXP_CONTAINS(account_name, "CO_") THEN "Colombia"
+        WHEN REGEXP_CONTAINS(account_name, "ec_") OR REGEXP_CONTAINS(account_name, "EC_") THEN "Ecuador"
+ 
+        -- CAM: Honduras, Guatemala, El Salvador, Costa Rica, Panamá, Nicaragua
+        WHEN REGEXP_CONTAINS(account_name, "hn_") OR REGEXP_CONTAINS(account_name, "HN_")
+             OR REGEXP_CONTAINS(account_name, "hnd_") OR REGEXP_CONTAINS(account_name, "HN_")
+             OR REGEXP_CONTAINS(account_name, "gt_") OR REGEXP_CONTAINS(account_name, "GT_")
+             OR REGEXP_CONTAINS(account_name, "slv_") OR REGEXP_CONTAINS(account_name, "SLV_")
+             OR REGEXP_CONTAINS(account_name, "cr_") OR REGEXP_CONTAINS(account_name, "CR_")
+             OR REGEXP_CONTAINS(account_name, "pa_") OR REGEXP_CONTAINS(account_name, "PA_")
+             OR REGEXP_CONTAINS(account_name, "ni_") OR REGEXP_CONTAINS(account_name, "NI_")
+             OR REGEXP_CONTAINS(campaign_name, "ni_") OR REGEXP_CONTAINS(account_name, "NI_")
+             THEN "CAM"
+ 
+        -- Caribe: Aruba, Curacao, Jamaica, Surinam, Trinidad
+        WHEN REGEXP_CONTAINS(campaign_name, "abw_") OR REGEXP_CONTAINS(campaign_name, "ABW_")
+             OR REGEXP_CONTAINS(campaign_name, "cw_") OR REGEXP_CONTAINS(campaign_name, "CW_")
+             OR REGEXP_CONTAINS(campaign_name, "jam_") OR REGEXP_CONTAINS(campaign_name, "JAM_")
+             OR REGEXP_CONTAINS(campaign_name, "sur_") OR REGEXP_CONTAINS(campaign_name, "SUR_")
+             OR REGEXP_CONTAINS(campaign_name, "tto_") OR REGEXP_CONTAINS(campaign_name, "TTO_")
+             THEN "Caribe"
+ 
+        ELSE "Otro"
+    END AS pais_agrupado,
+    SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] AS hexa,
+    account_id,
+    platform,
+    placement,
+    sum(engagement) AS engagement,
+    sum(post_likes) AS post_likes,
+    sum(post_comments) AS post_comments,
+    sum(post_shares) AS post_shares,
+    sum(post_saves) AS post_saves,
+    sum(leads) AS leads,
+
+ -- TRM 
+  --De USD a COP
+  CASE
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'usd') AND date_day BETWEEN '2025-07-01' AND '2025-07-31' THEN SUM(cost) * 4195
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'usd') AND date_day BETWEEN '2025-08-01' AND '2025-08-31' THEN SUM(cost) * 4010
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'usd') AND date_day BETWEEN '2025-09-01' AND '2025-09-30' THEN SUM(cost) * 3926.50
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'usd') AND date_day BETWEEN '2025-10-01' AND '2025-10-31' THEN SUM(cost) * 3845.25
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'usd') AND date_day BETWEEN '2025-11-01' AND '2025-11-30' THEN SUM(cost) * 3845.25
+
+ -- MXN a COP
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-06-01' AND '2025-06-30' THEN SUM(cost) * 217.16
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-07-01' AND '2025-07-31' THEN SUM(cost) * 222.76
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-08-01' AND '2025-08-31' THEN SUM(cost) * 214.92
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-09-01' AND '2025-09-30' THEN SUM(cost) * 213.84
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-10-01' AND '2025-10-31' THEN SUM(cost) * 210.34
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-11-01' AND '2025-11-30' THEN SUM(cost) * 210.34
+
+-- CLP a COP
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-06-01' AND '2025-06-30' THEN SUM(cost) * 4.35
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-07-01' AND '2025-07-31' THEN SUM(cost) * 4.28
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-08-01' AND '2025-08-31' THEN SUM(cost) * 4.16
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-09-01' AND '2025-09-30' THEN SUM(cost) * 4.07
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-10-01' AND '2025-10-31' THEN SUM(cost) * 4.11
+    WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-11-01' AND '2025-11-30' THEN SUM(cost) * 4.11
+
+      ELSE sum(cost)
+  END AS cost_cop,
+
+  CASE 
+  ---- De COP a USD
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'cop') AND date_day BETWEEN '2025-06-01' AND '2025-06-30' THEN SUM(cost) / 4260
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'cop') AND date_day BETWEEN '2025-07-01' AND '2025-07-31' THEN SUM(cost) / 4230
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'cop') AND date_day BETWEEN '2025-08-01' AND '2025-08-31' THEN SUM(cost) / 4176
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'cop') AND date_day BETWEEN '2025-09-01' AND '2025-09-30' THEN SUM(cost) / 4159
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'cop') AND date_day BETWEEN '2025-10-01' AND '2025-10-31' THEN SUM(cost) / 4041
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'cop') AND date_day BETWEEN '2025-11-01' AND '2025-11-30' THEN SUM(cost) / 4041
+
+-- De MXN a USD
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-06-01' AND '2025-06-30' THEN SUM(cost) / 0.5
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-07-01' AND '2025-07-31' THEN SUM(cost) / 0.5
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-08-01' AND '2025-08-31' THEN SUM(cost) / 0.5
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-09-01' AND '2025-09-30' THEN SUM(cost) / 0.5
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-10-01' AND '2025-10-31' THEN SUM(cost) / 0.5
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'mxn') AND date_day BETWEEN '2025-11-01' AND '2025-11-30' THEN SUM(cost) / 0.5
+
+-- De CLP a USD
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-06-01' AND '2025-06-30' THEN SUM(cost) / 0.0011
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-07-01' AND '2025-07-31' THEN SUM(cost) / 0.0011
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-08-01' AND '2025-08-31' THEN SUM(cost) / 0.0011
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-09-01' AND '2025-09-30' THEN SUM(cost) / 0.0011
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-10-01' AND '2025-10-31' THEN SUM(cost) / 0.0011
+      WHEN REGEXP_CONTAINS(LOWER(account_name), r'clp') AND date_day BETWEEN '2025-11-01' AND '2025-11-30' THEN SUM(cost) / 0.0011
+    ELSE SUM(cost)
+  END AS cost_dolares
+ 
+  from Union_plataformas
+  left join prod.dim_names
+  using(names_key)
+  left join `prod.dim_placement`
+  using(platform_key)
+  group by all
+  )
+
+
+  
+  select
+  a.account_name,
+a.campaign_name,
+a.campaign_id,
+a.plataforma,
+a.account_currency,
+a.impressions,
+a.clicks,
+a.cost,
+a.date_day,
+a.video_views,
+a.video_fully_played,
+a.add_to_cart,
+a.purchase_items,
+a.purchase_value,
+a.landing_page_views,
+a.completed_registration,
+a.time_spent_10_s,
+a.conversions_dv,
+a.video_completions_25,
+a.video_completions_50,
+a.video_completions_75,
+a.thruplays,
+a.cost_usd,
+a.categories,
+a.countries,
+a.marca,
+a.funnel_phase,
+a.preview_shareable_link,
+a.thumbnail_url,
+a.pais_agrupado,
+a.hexa,
+a.account_id,
+b.compras,
+a.platform,
+a.placement,
+a.engagement,
+a.post_likes,
+a.post_comments,
+a.post_shares,
+a.post_saves,
+a.leads,
+a.cost_cop,
+a.cost_dolares,
+b.leadspersonalizado,
+
+  from CAMPOS a
+LEFT JOIN (
+    SELECT 
+        campaign_id,
+        platform_position,
+        publisher_platform,
+        date_start,
+        SUM(CASE WHEN a.action_type = 'web_in_store_purchase' THEN a.value ELSE 0 END) AS compras, 
+        SUM(CASE WHEN a.action_type = 'offsite_conversion.fb_pixel_custom' THEN a.value ELSE 0 END) AS leadspersonalizado
+    FROM 
+        raw_facebook.raw_facebook_placement,
+    UNNEST(actions) AS a
+    WHERE 
+        date_start BETWEEN fecha_inicio AND fecha_fin
+    GROUP BY 
+        campaign_id, platform_position, publisher_platform, date_start
+) b
+ON a.campaign_id = b.campaign_id
+   AND a.date_day = b.date_start
+   AND a.placement = b.platform_position
+   AND a.platform = b.publisher_platform
+WHERE cost > 0;
+
+END;
