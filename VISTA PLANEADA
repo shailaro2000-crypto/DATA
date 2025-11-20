@@ -1,0 +1,193 @@
+CREATE OR REPLACE TABLE `smg-zenith-itau-co-prd-mg.sandbox_bi.vista_planeada`
+PARTITION BY date_day AS
+WITH conteo_dias AS (
+  SELECT
+    campaign_id,
+    SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] AS hexa,
+    CONCAT(EXTRACT(YEAR FROM date_day), '-', EXTRACT(MONTH FROM date_day)) AS day_condition,
+    COUNT(DISTINCT date_day) AS dias_corridos
+  FROM `smg-zenith-itau-co-prd-mg.sandbox_bi.vista_campaign`
+  GROUP BY ALL
+  /*UNION ALL
+  SELECT
+    NULL AS campaign_id,
+    codigo_hexadecimal AS hexa,
+    CONCAT(EXTRACT(YEAR FROM fecha_inicio), '-', EXTRACT(MONTH FROM fecha_inicio)) AS day_condition,
+    COUNT(DISTINCT fecha_inicio) AS dias_corridos
+  FROM `smg-zenith-itau-co-prd-mg.google_sheets.dm_medios_externos`
+  GROUP BY ALL*/
+),
+procedimiento_hexas_repetidos AS (
+  SELECT
+    SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] AS hexa,
+    CONCAT(EXTRACT(YEAR FROM date_day), '-', EXTRACT(MONTH FROM date_day)) AS day_condition,
+    COUNT(DISTINCT campaign_id) AS num_campaign
+  FROM `smg-zenith-itau-co-prd-mg.sandbox_bi.vista_campaign`
+  GROUP BY ALL
+  /*UNION ALL
+  SELECT
+    codigo_hexadecimal AS hexa,
+    CONCAT(EXTRACT(YEAR FROM fecha_inicio), '-', EXTRACT(MONTH FROM fecha_inicio)) AS day_condition,
+    COUNT(DISTINCT codigo_hexadecimal) AS num_campaign
+  FROM `smg-zenith-itau-co-prd-mg.google_sheets.dm_medios_externos`
+  GROUP BY ALL*/
+),
+tabla_ejecutada AS (
+  SELECT
+    account_name,
+    COALESCE (b.campaign_name,a.nombre_flow_DB) AS campaign_name_final,
+    campaign_id,
+    plataforma,
+    account_currency,
+    SUM(impressions) AS impressions,
+    SUM(clicks) AS clicks,
+    SUM(cost) AS cost,
+    date_day,
+    SUM(video_views) AS video_views,
+    SUM(video_fully_played) AS video_fully_played,
+    SUM(add_to_cart) AS add_to_cart,
+    SUM(purchase_items) AS purchase_items,
+    SUM(purchase_value) AS purchase_value,
+    SUM(landing_page_views) AS landing_page_views,
+    SUM(completed_registration) AS completed_registration,
+    SUM(time_spent_10_s) AS time_spent_10_s,
+    SUM(conversions_dv) AS conversions_dv,
+    SUM(video_completions_25) AS video_completions_25,
+    SUM(video_completions_50) AS video_completions_50,
+    SUM(video_completions_75) AS video_completions_75,
+    SUM(thruplays) AS thruplays,
+    SUM(compras) AS compras,
+    funnel_phase,
+    account_id,
+    SUM(engagement) AS engagement,
+    SUM(post_likes) AS post_likes,
+    SUM(post_comments) AS post_comments,
+    SUM(post_shares) AS post_shares,
+    SUM(post_saves) AS post_saves,
+    SUM(leads) AS leads,
+    SPLIT(campaign_name, '_')[OFFSET(ARRAY_LENGTH(SPLIT(campaign_name, '_')) - 1)] AS hexa,
+    CONCAT(EXTRACT(YEAR FROM date_day), '-', EXTRACT(MONTH FROM date_day)) AS day_condition,
+    SUM(leadspersonalizado) AS leadspersonalizado
+  FROM `smg-zenith-itau-co-prd-mg.sandbox_bi.vista_campaign`
+  GROUP BY ALL
+  /*UNION ALL
+  SELECT
+    NULL AS account_name,
+    nombre_de_campana AS campaign_name,
+    NULL AS campaign_id,
+    medio AS plataforma,
+    moneda AS account_currency,
+    SUM(impresiones) AS impressions,
+    SUM(clicks) AS clicks,
+    SUM(media_cost) AS cost,
+    fecha_inicio AS date_day,
+    SUM(video_views) AS video_views,
+    SUM(reproduccion_de_video_al_100) AS video_fully_played,
+    NULL AS add_to_cart,
+    NULL AS purchase_items,
+    NULL AS purchase_value,
+    NULL AS landing_page_views,
+    NULL AS completed_registration,
+    NULL AS time_spent_10_s,
+    NULL AS conversions_dv,
+    SUM(reproduccion_de_video_al_25) AS video_completions_25,
+    SUM(reproduccion_de_video_al_50) AS video_completions_50,
+    SUM(reproduccion_de_video_al_75) AS video_completions_75,
+    NULL AS thruplays,
+    NULL AS compras,
+    categoria AS categories,
+    pais AS countries,
+    marca AS marca,
+    funnel_mms AS funnel_phase,
+    NULL AS pais_agrupado,
+    NULL AS account_id,
+    NULL AS engagement,
+    NULL AS post_likes,
+    NULL AS post_comments,
+    NULL AS post_shares,
+    NULL AS post_saves,
+    SUM(leads) AS leads,
+    codigo_hexadecimal AS hexa,
+    CONCAT(EXTRACT(YEAR FROM fecha_inicio), '-', EXTRACT(MONTH FROM fecha_inicio)) AS day_condition,
+    NULL AS leadspersonalizado
+  FROM `smg-zenith-itau-co-prd-mg.google_sheets.dm_medios_externos`
+  GROUP BY ALL */
+),
+tabla_planeada AS (
+  SELECT
+    id_flow,
+    flow_code AS nombre_flow_DB,
+    pais_name AS pais_name_DB,
+    brand_name AS brand_name_DB,
+    media_name AS plataforma_DB,
+    und_medida_name AS formato_DB,
+    funnel_stage_desc AS etapa_funnel_DB,
+    line_media_investment AS inversion_planeado_DB,
+    tipo_compra_code AS tipo_compra_DB,
+    objective_name AS objetivo_DB,
+    line_media_expected_actions AS kpi_planeado_DB,
+    line_media_expected_imp AS esperado_impresiones_DB,
+    line_media_cost_compra AS costo_planeado_DB,
+    amount_spent AS ejecutado_DB,
+    line_media_reach AS alcance_estimadoDB,
+    line_media_start_date AS fecha_inicio_DB,
+    line_media_end_date AS fecha_fin_DB,
+    COALESCE(aon_hex_id, hex_id_line) AS hex_id_line,
+    CONCAT(EXTRACT(YEAR FROM line_media_start_date), '-', EXTRACT(MONTH FROM line_media_start_date)) AS day_condition_digital_box
+  FROM `smg-zenith-itau-co-prd-mg.sandbox_bi.digital_box`
+),
+
+tabla_apex AS (
+ SELECT 
+  hexa as hexa_apex,
+  fecha_inicio,
+  fecha_final,
+  tipo_de_compra as tipo_de_compra_apex ,
+  dia,
+  impresiones,
+  clics,
+  alcance,
+  views,
+  frecuencia,
+  consumo,
+  ctr,
+  plataforma as plataforma_apex,
+  formato,
+FROM 
+  `smg-zenith-itau-co-prd-mg.google_sheets.dm_apex_medio` 
+  ),
+
+
+union_tabla AS (
+  SELECT
+    a.*,
+    b.*,
+    d.*
+  FROM tabla_planeada AS a
+  LEFT JOIN tabla_ejecutada AS b
+    ON a.hex_id_line = b.hexa
+   AND b.day_condition = a.day_condition_digital_box
+   left join tabla_apex d
+   ON d.hexa_apex = a.hex_id_line
+
+  GROUP BY ALL
+),
+division_dias AS (
+  SELECT
+    a.*,
+    c.dias_corridos,
+    d.num_campaign,
+    SAFE_DIVIDE(SAFE_DIVIDE(a.inversion_planeado_DB, c.dias_corridos), d.num_campaign) AS planeado_diario,
+    SAFE_DIVIDE(SAFE_DIVIDE(IF(a.objetivo_DB IN ('IMPRESSIONS', 'REACH', 'BRAND AWARENESS'), a.esperado_impresiones_DB, a.kpi_planeado_DB), c.dias_corridos), d.num_campaign) AS kpi_plneado_diario,
+    CAST(NULL AS FLOAT64) AS roas
+  FROM union_tabla AS a
+  LEFT JOIN conteo_dias AS c
+    ON a.hex_id_line = c.hexa
+   AND a.day_condition_digital_box = c.day_condition
+   AND IF(a.campaign_id IS NULL, '1', a.campaign_id) = IF(c.campaign_id IS NULL, '1', c.campaign_id)
+  LEFT JOIN procedimiento_hexas_repetidos AS d
+    ON a.hex_id_line = d.hexa
+   AND a.day_condition_digital_box = d.day_condition
+)
+SELECT *
+FROM division_dias;
